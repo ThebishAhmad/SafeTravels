@@ -1,0 +1,60 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Josefin+Sans:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  --primary: #0F766E;
+  --primary-light: #14B8A6;
+  --cta: #0369A1;
+  --cta-hover: #0284C7;
+  --background: #F0FDFA;
+  --background-alt: #CCFBF1;
+  --text: #134E4A;
+  --text-muted: #475569;
+  --surface: #ffffff;
+  --border: #99F6E4;
+  --danger: #DC2626;
+  --warning: #F59E0B;
+  --success: #10B981;
+}
+
+.dark {
+  --primary: #14B8A6;
+  --primary-light: #2DD4BF;
+  --cta: #38BDF8;
+  --cta-hover: #7DD3FC;
+  --background: #0C1917;
+  --background-alt: #132220;
+  --text: #E2E8F0;
+  --text-muted: #94A3B8;
+  --surface: #1A2D2A;
+  --border: #1E3A36;
+  --danger: #F87171;
+  --warning: #FBBF24;
+  --success: #34D399;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-cta: var(--cta);
+  --color-cta-hover: var(--cta-hover);
+  --color-background: var(--background);
+  --color-background-alt: var(--background-alt);
+  --color-text: var(--text);
+  --color-text-muted: var(--text-muted);
+  --color-surface: var(--surface);
+  --color-border: var(--border);
+  --color-danger: var(--danger);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+}
+
+body {
+  background: var(--background);
+  color: var(--text);
+  font-family: 'Josefin Sans', sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Cinzel', serif;
+}
