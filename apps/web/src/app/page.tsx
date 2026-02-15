@@ -102,7 +102,7 @@ export default function Home() {
               </svg>
             </Link>
             <Link
-              href="/track"
+              href="/bus-tracking"
               className="bg-surface border border-border text-text hover:bg-background-alt px-8 py-3.5 rounded-xl text-base font-semibold transition-colors duration-200 cursor-pointer"
             >
               Track a Bus
