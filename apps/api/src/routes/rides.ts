@@ -1,70 +1,98 @@
 import { Router, Request, Response } from 'express';
+import { supabase } from '../lib/supabase';
 
 const router = Router();
 
-interface Ride {
-    id: string;
-    hostId: string;
-    hostName: string;
-    dest: string;
-    departureTime: string;
-    riders: number;
-    maxPassengers: number;
-    fare: number;
-    perPerson: number;
-    gender: string;
-    status: string;
-}
-
-const rides: Ride[] = [
-    { id: 'RIDE-42', hostId: '1', hostName: 'Aman S.', dest: 'Jalandhar City Station', departureTime: '2026-02-15T16:30:00', riders: 2, maxPassengers: 4, fare: 100, perPerson: 25, gender: 'ANY', status: 'OPEN' },
-    { id: 'RIDE-43', hostId: '2', hostName: 'Priya K.', dest: 'Railway Station', departureTime: '2026-02-15T17:00:00', riders: 1, maxPassengers: 3, fare: 120, perPerson: 40, gender: 'FEMALE_ONLY', status: 'OPEN' },
-    { id: 'RIDE-44', hostId: '3', hostName: 'Rohit M.', dest: 'Bus Stand', departureTime: '2026-02-15T17:30:00', riders: 3, maxPassengers: 4, fare: 80, perPerson: 20, gender: 'ANY', status: 'OPEN' },
+// Fare chart — MUST be before /:id routes
+const FARE_CHART = [
+    { from: 'Campus', to: 'Maqsudan Chowk', fare: 20 },
+    { from: 'Campus', to: 'DAV College / HMV', fare: 30 },
+    { from: 'Campus', to: 'PAP Chowk', fare: 40 },
+    { from: 'Campus', to: 'Bus Stand', fare: 40 },
+    { from: 'Campus', to: 'Jalandhar City', fare: 50 },
+    { from: 'Campus', to: 'Jalandhar City Railway Station', fare: 60 },
+    { from: 'Campus', to: 'Model Town', fare: 80 },
+    { from: 'Campus', to: 'Rama Mandi', fare: 50 },
 ];
-
-const fareChart = [
-    { from: 'Campus', to: 'City Stand', fare: 100 },
-    { from: 'Campus', to: 'Railway Station', fare: 120 },
-    { from: 'Campus', to: 'Bus Stand', fare: 80 },
-    { from: 'Campus', to: 'Model Town', fare: 90 },
-];
-
-router.get('/', (_req: Request, res: Response) => {
-    res.json(rides.filter(r => r.status === 'OPEN'));
-});
-
-router.post('/', (req: Request, res: Response) => {
-    const { dest, departureTime, maxPassengers, gender } = req.body;
-    const routeFare = fareChart.find(f => f.to === dest);
-    const newRide: Ride = {
-        id: 'RIDE-' + (rides.length + 40),
-        hostId: 'current-user',
-        hostName: 'You',
-        dest,
-        departureTime,
-        riders: 1,
-        maxPassengers: maxPassengers || 4,
-        fare: routeFare?.fare || 100,
-        perPerson: routeFare ? Math.ceil(routeFare.fare / (maxPassengers || 4)) : 25,
-        gender: gender || 'ANY',
-        status: 'OPEN',
-    };
-    rides.push(newRide);
-    res.status(201).json(newRide);
-});
-
-router.post('/:id/join', (req: Request, res: Response) => {
-    const ride = rides.find(r => r.id === req.params.id);
-    if (!ride) { res.status(404).json({ error: 'Ride not found' }); return; }
-    if (ride.riders >= ride.maxPassengers) { res.status(400).json({ error: 'Ride is full' }); return; }
-    ride.riders += 1;
-    ride.perPerson = Math.ceil(ride.fare / ride.riders);
-    if (ride.riders >= ride.maxPassengers) ride.status = 'FULL';
-    res.json(ride);
-});
 
 router.get('/fares', (_req: Request, res: Response) => {
-    res.json(fareChart);
+    res.json(FARE_CHART);
+});
+
+// Get all open ride requests
+router.get('/', async (_req: Request, res: Response) => {
+    const { data, error } = await supabase
+        .from('rides')
+        .select('*, users!host_id(name)')
+        .eq('status', 'OPEN');
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const formatted = (data || []).map(ride => ({
+        ...ride,
+        hostName: ride.users?.name || 'Unknown',
+        perPerson: Math.ceil(ride.fare / Math.max(ride.riders_count || 1, 1))
+    }));
+
+    res.json(formatted);
+});
+
+// Create a new ride
+router.post('/', async (req: Request, res: Response) => {
+    const { dest, departureTime, maxPassengers, gender } = req.body;
+
+    const { data: userData } = await supabase.from('users').select('id').limit(1).single();
+    const userId = userData?.id;
+
+    if (!userId) {
+        return res.status(401).json({ error: 'User not found (Seed DB first)' });
+    }
+
+    // Look up fare from chart
+    const fareEntry = FARE_CHART.find(f => f.to === dest);
+    const fare = fareEntry ? fareEntry.fare : 50;
+
+    const { data, error } = await supabase
+        .from('rides')
+        .insert([
+            {
+                host_id: userId,
+                dest,
+                departure_time: departureTime,
+                max_passengers: maxPassengers,
+                fare,
+                gender_pref: gender
+            }
+        ])
+        .select()
+        .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.status(201).json(data);
+});
+
+// Join a ride
+router.post('/:id/join', async (req: Request, res: Response) => {
+    const { id } = req.params;
+
+    const { data: ride, error: fetchError } = await supabase
+        .from('rides')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+    if (fetchError || !ride) return res.status(404).json({ error: 'Ride not found' });
+    if (ride.riders_count >= ride.max_passengers) return res.status(400).json({ error: 'Ride full' });
+
+    const { data, error } = await supabase
+        .from('rides')
+        .update({ riders_count: ride.riders_count + 1 })
+        .eq('id', id)
+        .select()
+        .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+    res.json(data);
 });
 
 export default router;

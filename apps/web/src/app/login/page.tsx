@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/api";
 
 export default function LoginPage() {
     const router = useRouter();
@@ -10,26 +11,36 @@ export default function LoginPage() {
     const [otp, setOtp] = useState("");
     const [step, setStep] = useState<"email" | "otp">("email");
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState("");
 
-    const handleSendOtp = (e: React.FormEvent) => {
+    const handleSendOtp = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!email.endsWith("@nitj.ac.in")) {
-            alert("Please use your @nitj.ac.in email address");
-            return;
-        }
+        setError("");
         setLoading(true);
-        setTimeout(() => {
+        try {
+            await api.auth.sendOtp(email);
             setStep("otp");
+        } catch (err: any) {
+            setError(err.message || "Failed to send OTP");
+        } finally {
             setLoading(false);
-        }, 1000);
+        }
     };
 
-    const handleVerifyOtp = (e: React.FormEvent) => {
+    const handleVerifyOtp = async (e: React.FormEvent) => {
         e.preventDefault();
+        setError("");
         setLoading(true);
-        setTimeout(() => {
+        try {
+            await api.auth.verifyOtp(email, otp);
+            // In a real app, you'd store the token (e.g. in cookies/localStorage)
+            // For this demo, we assume the backend handled session or we just redirect
             router.push("/dashboard");
-        }, 800);
+        } catch (err: any) {
+            setError(err.message || "Invalid OTP");
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -50,6 +61,12 @@ export default function LoginPage() {
                 </div>
 
                 <div className="bg-surface border border-border rounded-2xl p-8">
+                    {error && (
+                        <div className="mb-4 p-3 bg-danger/10 border border-danger/20 rounded-xl text-danger text-sm text-center">
+                            {error}
+                        </div>
+                    )}
+
                     {step === "email" ? (
                         <form onSubmit={handleSendOtp} className="space-y-5">
                             <div>

@@ -1,15 +1,41 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001';
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(err.error || `HTTP ${res.status}`);
+  const url = `${API_BASE}${path.startsWith('/') ? path : `/${path}`}`;
+
+  // Merge headers safely
+  const headers = new Headers(options?.headers);
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
   }
-  return res.json();
+
+  try {
+    const res = await fetch(url, {
+      ...options,
+      headers,
+    });
+
+    if (!res.ok) {
+      let errorMessage = `HTTP ${res.status}: ${res.statusText}`;
+      try {
+        const text = await res.text();
+        if (text) {
+          const err = JSON.parse(text);
+          errorMessage = err.error || errorMessage;
+        }
+      } catch (e) {
+        // Fallback if not JSON or parsing fails
+      }
+      throw new Error(errorMessage);
+    }
+
+    return res.json();
+  } catch (err: any) {
+    if (err.name === 'TypeError' && (err.message.includes('fetch') || err.message.includes('network'))) {
+      throw new Error(`Connection failed to ${url}. Is the backend server running?`);
+    }
+    throw err;
+  }
 }
 
 export const api = {

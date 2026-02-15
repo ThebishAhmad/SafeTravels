@@ -1,26 +1,46 @@
 "use client";
 
-const user = {
-    name: "Tabish Ahmad",
-    email: "21104070@nitj.ac.in",
-    phone: "+91 98765 43210",
-    role: "Student",
-    department: "Computer Science",
-    joinedDate: "August 2021",
-    emergencyContact: "+91 91234 56789",
-    totalRides: 47,
-    totalSaved: 1240,
-    carbonSaved: "12.4 kg",
-};
-
-const rideHistory = [
-    { id: "RIDE-42", dest: "Railway Station", date: "2026-02-14", fare: "₹30", status: "COMPLETED", riders: 4 },
-    { id: "RIDE-38", dest: "City Stand", date: "2026-02-12", fare: "₹25", status: "COMPLETED", riders: 4 },
-    { id: "RIDE-35", dest: "Bus Stand", date: "2026-02-10", fare: "₹27", status: "COMPLETED", riders: 3 },
-    { id: "RIDE-30", dest: "Model Town", date: "2026-02-08", fare: "₹30", status: "COMPLETED", riders: 3 },
-];
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 export default function ProfilePage() {
+    const [user, setUser] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+
+    // Mock extended data since API only returns basic user for now
+    const extendedData = {
+        department: "Computer Science",
+        joinedDate: "August 2021",
+        emergencyContact: "+91 91234 56789",
+        totalRides: 47,
+        totalSaved: 1240,
+        carbonSaved: "12.4 kg",
+    };
+
+    const rideHistory = [
+        { id: "RIDE-42", dest: "Railway Station", date: "2026-02-14", fare: "₹30", status: "COMPLETED", riders: 4 },
+        { id: "RIDE-38", dest: "City Stand", date: "2026-02-12", fare: "₹25", status: "COMPLETED", riders: 4 },
+        { id: "RIDE-35", dest: "Bus Stand", date: "2026-02-10", fare: "₹27", status: "COMPLETED", riders: 3 },
+        { id: "RIDE-30", dest: "Model Town", date: "2026-02-08", fare: "₹30", status: "COMPLETED", riders: 3 },
+    ];
+
+    useEffect(() => {
+        async function fetchProfile() {
+            try {
+                const userData = await api.auth.me();
+                setUser({ ...userData, ...extendedData });
+            } catch (err) {
+                console.error("Failed to load profile", err);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchProfile();
+    }, []);
+
+    if (loading) return <div className="p-8 text-center text-text-muted">Loading profile...</div>;
+    if (!user) return <div className="p-8 text-center text-danger">Failed to load profile. Please login again.</div>;
+
     return (
         <div className="md:ml-64 min-h-screen bg-background pb-20 md:pb-0">
             <div className="max-w-4xl mx-auto p-6">
@@ -32,7 +52,7 @@ export default function ProfilePage() {
                 <div className="bg-surface border border-border rounded-2xl p-6 mb-6">
                     <div className="flex items-center gap-4 mb-6">
                         <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center text-white text-2xl font-bold" style={{ fontFamily: "'Cinzel', serif" }}>
-                            {user.name.split(" ").map(n => n[0]).join("")}
+                            {user.name.split(" ").map((n: string) => n[0]).join("")}
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-text">{user.name}</h2>
@@ -43,7 +63,7 @@ export default function ProfilePage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {[
-                            { label: "Phone", value: user.phone },
+                            { label: "Phone", value: user.phone || "Not Verified" },
                             { label: "Emergency Contact", value: user.emergencyContact },
                             { label: "Member Since", value: user.joinedDate },
                             { label: "Total Rides", value: String(user.totalRides) },

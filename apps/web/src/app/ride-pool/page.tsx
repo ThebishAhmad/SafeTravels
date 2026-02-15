@@ -1,26 +1,73 @@
 "use client";
 
-import { useState } from "react";
-
-const availableRides = [
-    { id: 1, host: "Aman S.", dest: "Jalandhar City Station", time: "Today 4:30 PM", riders: 2, max: 4, fare: 100, perPerson: 25, gender: "ANY" },
-    { id: 2, host: "Priya K.", dest: "Railway Station", time: "Today 5:00 PM", riders: 1, max: 3, fare: 120, perPerson: 40, gender: "FEMALE_ONLY" },
-    { id: 3, host: "Rohit M.", dest: "Bus Stand", time: "Today 5:30 PM", riders: 3, max: 4, fare: 80, perPerson: 20, gender: "ANY" },
-    { id: 4, host: "Sneha R.", dest: "Model Town", time: "Today 6:00 PM", riders: 1, max: 3, fare: 90, perPerson: 30, gender: "ANY" },
-];
-
-const fareChart = [
-    { from: "Campus", to: "City Stand", fare: "₹100" },
-    { from: "Campus", to: "Railway Station", fare: "₹120" },
-    { from: "Campus", to: "Bus Stand", fare: "₹80" },
-    { from: "Campus", to: "Model Town", fare: "₹90" },
-];
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 export default function RidePoolPage() {
     const [showCreate, setShowCreate] = useState(false);
     const [filter, setFilter] = useState("ALL");
+    const [rides, setRides] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [fareChart, setFareChart] = useState<any[]>([]);
 
-    const filtered = filter === "ALL" ? availableRides : availableRides.filter(r => r.gender === filter);
+    // Form State
+    const [dest, setDest] = useState("");
+    const [time, setTime] = useState("");
+    const [maxPassengers, setMaxPassengers] = useState(4);
+    const [gender, setGender] = useState("ANY");
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    async function fetchData() {
+        try {
+            const [ridesData, faresData] = await Promise.all([
+                api.rides.list() as Promise<any[]>,
+                api.rides.getFares() as Promise<any[]>
+            ]);
+            setRides(ridesData);
+            setFareChart(faresData);
+        } catch (err) {
+            console.error("Failed to load ride data:", err);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const handleCreateRide = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!dest || !time) {
+            alert("Please select a destination and departure time.");
+            return;
+        }
+
+        try {
+            await api.rides.create({
+                dest,
+                departureTime: new Date().toISOString().split('T')[0] + 'T' + time + ':00',
+                maxPassengers: Number(maxPassengers),
+                gender
+            });
+            setShowCreate(false);
+            fetchData();
+            alert("Ride request created successfully!");
+        } catch (err) {
+            alert("Failed to create ride");
+        }
+    };
+
+    const handleJoinRide = async (id: string) => {
+        try {
+            await api.rides.join(id);
+            fetchData();
+            alert("Successfully joined the ride!");
+        } catch (err: any) {
+            alert(err.message || "Failed to join ride");
+        }
+    };
+
+    const filtered = filter === "ALL" ? rides : rides.filter(r => r.gender === filter);
 
     return (
         <div className="md:ml-64 min-h-screen bg-background pb-20 md:pb-0">
@@ -47,39 +94,62 @@ export default function RidePoolPage() {
                 {showCreate && (
                     <div className="bg-surface border border-border rounded-2xl p-6 mb-6">
                         <h3 className="font-bold text-text mb-4">Create a Ride Request</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-sm font-medium text-text mb-1">Destination</label>
-                                <select className="w-full px-4 py-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer">
-                                    <option>Jalandhar City Station</option>
-                                    <option>Railway Station</option>
-                                    <option>Bus Stand</option>
-                                    <option>Model Town</option>
-                                </select>
+                        <form onSubmit={handleCreateRide}>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-text mb-1">Destination</label>
+                                    <select
+                                        value={dest}
+                                        onChange={(e) => setDest(e.target.value)}
+                                        className="w-full px-4 py-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                                    >
+                                        <option value="">Select Destination</option>
+                                        {fareChart.map(f => (
+                                            <option key={f.to} value={f.to}>{f.to} (₹{f.fare})</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-text mb-1">Departure Time</label>
+                                    <input
+                                        type="time"
+                                        value={time}
+                                        onChange={(e) => setTime(e.target.value)}
+                                        className="w-full px-4 py-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-text mb-1">Max Passengers</label>
+                                    <select
+                                        value={maxPassengers}
+                                        onChange={(e) => setMaxPassengers(Number(e.target.value))}
+                                        className="w-full px-4 py-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                                    >
+                                        <option value={2}>2</option>
+                                        <option value={3}>3</option>
+                                        <option value={4}>4</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-text mb-1">Gender Preference</label>
+                                    <select
+                                        value={gender}
+                                        onChange={(e) => setGender(e.target.value)}
+                                        className="w-full px-4 py-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
+                                    >
+                                        <option value="ANY">Everyone Welcome</option>
+                                        <option value="FEMALE_ONLY">Female Only</option>
+                                    </select>
+                                </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-text mb-1">Departure Time</label>
-                                <input type="time" className="w-full px-4 py-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-text mb-1">Max Passengers</label>
-                                <select className="w-full px-4 py-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer">
-                                    <option>2</option>
-                                    <option>3</option>
-                                    <option selected>4</option>
-                                </select>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-text mb-1">Gender Preference</label>
-                                <select className="w-full px-4 py-3 bg-background border border-border rounded-xl text-text focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer">
-                                    <option value="ANY">Everyone Welcome</option>
-                                    <option value="FEMALE_ONLY">Female Only</option>
-                                </select>
-                            </div>
-                        </div>
-                        <button className="mt-4 bg-primary hover:opacity-90 text-white px-6 py-3 rounded-xl font-semibold transition-opacity duration-200 cursor-pointer">
-                            Post Ride Request
-                        </button>
+                            <button
+                                type="submit"
+                                className="mt-4 bg-primary hover:opacity-90 text-white px-6 py-3 rounded-xl font-semibold transition-opacity duration-200 cursor-pointer"
+                            >
+                                Post Ride Request
+                            </button>
+                        </form>
                     </div>
                 )}
 
@@ -99,42 +169,59 @@ export default function RidePoolPage() {
 
                 {/* Available Rides */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
-                    {filtered.map((ride) => (
-                        <div key={ride.id} className="bg-surface border border-border rounded-2xl p-5 hover:border-primary-light transition-colors duration-300 cursor-pointer">
-                            <div className="flex items-start justify-between mb-3">
-                                <div>
-                                    <h3 className="font-bold text-text">{ride.dest}</h3>
-                                    <p className="text-xs text-text-muted mt-0.5">{ride.time}</p>
+                    {loading ? (
+                        <p className="col-span-2 text-center text-text-muted">Loading rides...</p>
+                    ) : filtered.length === 0 ? (
+                        <p className="col-span-2 text-center text-text-muted">No ride requests available. Create one!</p>
+                    ) : (
+                        filtered.map((ride) => (
+                            <div key={ride.id} className="bg-surface border border-border rounded-2xl p-5 hover:border-primary-light transition-colors duration-300 cursor-pointer">
+                                <div className="flex items-start justify-between mb-3">
+                                    <div>
+                                        <h3 className="font-bold text-text">{ride.dest}</h3>
+                                        <p className="text-xs text-text-muted mt-0.5">
+                                            {new Date(ride.departure_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        </p>
+                                    </div>
+                                    {ride.gender_pref === "FEMALE_ONLY" && (
+                                        <span className="text-xs bg-pink-100 text-pink-600 px-2 py-0.5 rounded-full font-medium">Female Only</span>
+                                    )}
                                 </div>
-                                {ride.gender === "FEMALE_ONLY" && (
-                                    <span className="text-xs bg-pink-100 text-pink-600 px-2 py-0.5 rounded-full font-medium">Female Only</span>
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-1.5">
+                                        <svg className="w-4 h-4 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                                        </svg>
+                                        <span className="text-sm text-text-muted">by {ride.hostName || "Student"}</span>
+                                    </div>
+                                    <span className="text-sm font-semibold text-primary">{ride.riders_count}/{ride.max_passengers} joined</span>
+                                </div>
+                                <div className="bg-background-alt rounded-xl p-3 flex items-center justify-between mb-4">
+                                    <div>
+                                        <p className="text-xs text-text-muted">Total Fare</p>
+                                        <p className="font-bold text-text">₹{ride.fare}</p>
+                                    </div>
+                                    <div className="w-px h-8 bg-border" />
+                                    <div className="text-right">
+                                        <p className="text-xs text-text-muted">You Pay</p>
+                                        <p className="font-bold text-primary">₹{ride.perPerson || Math.ceil(ride.fare / Math.max(ride.riders_count, 1))}</p>
+                                    </div>
+                                </div>
+                                {ride.status === "FULL" ? (
+                                    <button disabled className="w-full bg-surface border border-border text-text-muted py-2.5 rounded-xl text-sm font-semibold cursor-not-allowed">
+                                        Ride Full
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={() => handleJoinRide(ride.id)}
+                                        className="w-full bg-cta hover:bg-cta-hover text-white py-2.5 rounded-xl text-sm font-semibold transition-colors duration-200 cursor-pointer"
+                                    >
+                                        Join Ride
+                                    </button>
                                 )}
                             </div>
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-1.5">
-                                    <svg className="w-4 h-4 text-text-muted" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
-                                    </svg>
-                                    <span className="text-sm text-text-muted">by {ride.host}</span>
-                                </div>
-                                <span className="text-sm font-semibold text-primary">{ride.riders}/{ride.max} joined</span>
-                            </div>
-                            <div className="bg-background-alt rounded-xl p-3 flex items-center justify-between mb-4">
-                                <div>
-                                    <p className="text-xs text-text-muted">Total Fare</p>
-                                    <p className="font-bold text-text">₹{ride.fare}</p>
-                                </div>
-                                <div className="w-px h-8 bg-border" />
-                                <div className="text-right">
-                                    <p className="text-xs text-text-muted">You Pay</p>
-                                    <p className="font-bold text-primary">₹{ride.perPerson}</p>
-                                </div>
-                            </div>
-                            <button className="w-full bg-cta hover:bg-cta-hover text-white py-2.5 rounded-xl text-sm font-semibold transition-colors duration-200 cursor-pointer">
-                                Join Ride
-                            </button>
-                        </div>
-                    ))}
+                        ))
+                    )}
                 </div>
 
                 {/* Fixed Fare Chart */}
@@ -152,11 +239,11 @@ export default function RidePoolPage() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-border">
-                            {fareChart.map((row, i) => (
+                            {fareChart.map((row: any, i: number) => (
                                 <tr key={i} className="hover:bg-background-alt transition-colors duration-200">
                                     <td className="p-4 text-sm text-text">{row.from}</td>
                                     <td className="p-4 text-sm text-text font-medium">{row.to}</td>
-                                    <td className="p-4 text-sm text-primary font-bold text-right">{row.fare}</td>
+                                    <td className="p-4 text-sm text-primary font-bold text-right">₹{row.fare}</td>
                                 </tr>
                             ))}
                         </tbody>

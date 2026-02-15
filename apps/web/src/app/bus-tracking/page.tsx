@@ -1,37 +1,7 @@
 "use client";
 
-import { useState } from "react";
-
-const routes = [
-    {
-        id: "route-1",
-        name: "Campus → City Stand",
-        buses: [
-            { id: "BUS-01", eta: "5 min", load: "LOW", lastSeen: "Near Main Gate" },
-            { id: "BUS-04", eta: "22 min", load: "MEDIUM", lastSeen: "At Workshop Chowk" },
-        ],
-        stops: ["Main Gate", "Workshop Chowk", "Lovely Chowk", "City Stand"],
-        frequency: "Every 20 min",
-    },
-    {
-        id: "route-2",
-        name: "Campus → Railway Station",
-        buses: [
-            { id: "BUS-02", eta: "12 min", load: "MEDIUM", lastSeen: "Crossing PAP Chowk" },
-        ],
-        stops: ["Main Gate", "PAP Chowk", "Model Town", "Railway Station"],
-        frequency: "Every 30 min",
-    },
-    {
-        id: "route-3",
-        name: "Campus → Bus Stand",
-        buses: [
-            { id: "BUS-03", eta: "20 min", load: "HIGH", lastSeen: "Departed Campus" },
-        ],
-        stops: ["Main Gate", "Jalandhar Bypass", "BMC Chowk", "Bus Stand"],
-        frequency: "Every 25 min",
-    },
-];
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 const loadColors: Record<string, string> = {
     LOW: "text-success bg-success/10",
@@ -41,6 +11,31 @@ const loadColors: Record<string, string> = {
 
 export default function BusTrackingPage() {
     const [selectedRoute, setSelectedRoute] = useState<string | null>(null);
+    const [routes, setRoutes] = useState<any[]>([]);
+    const [activeBuses, setActiveBuses] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchData() {
+            try {
+                const [allRoutes, buses] = await Promise.all([
+                    api.buses.getRoutes(),
+                    api.buses.getActive()
+                ]);
+                setRoutes(allRoutes);
+                setActiveBuses(buses);
+            } catch (err) {
+                console.error("Failed to fetch bus data:", err);
+            } finally {
+                setLoading(false);
+            }
+        }
+        fetchData();
+    }, []);
+
+    const getRouteBuses = (routeId: string) => {
+        return activeBuses.filter((b) => b.routeId === routeId);
+    };
 
     return (
         <div className="md:ml-64 min-h-screen bg-background pb-20 md:pb-0">
@@ -66,7 +61,7 @@ export default function BusTrackingPage() {
                         <div className="absolute top-4 right-4 bg-surface/90 backdrop-blur-sm border border-border rounded-xl px-3 py-2 text-xs">
                             <span className="flex items-center gap-1.5">
                                 <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
-                                <span className="font-medium text-text">3 buses online</span>
+                                <span className="font-medium text-text">{activeBuses.length} buses online</span>
                             </span>
                         </div>
                     </div>
@@ -74,74 +69,87 @@ export default function BusTrackingPage() {
 
                 {/* Routes List */}
                 <div className="space-y-4">
-                    {routes.map((route) => (
-                        <div key={route.id} className="bg-surface border border-border rounded-2xl overflow-hidden">
-                            <button
-                                onClick={() => setSelectedRoute(selectedRoute === route.id ? null : route.id)}
-                                className="w-full p-5 flex items-center justify-between hover:bg-background-alt transition-colors duration-200 cursor-pointer"
-                            >
-                                <div className="text-left">
-                                    <h3 className="font-bold text-text">{route.name}</h3>
-                                    <p className="text-xs text-text-muted mt-1">{route.frequency} · {route.stops.length} stops</p>
-                                </div>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-sm font-semibold text-primary">
-                                        {route.buses[0]?.eta || "N/A"}
-                                    </span>
-                                    <svg className={`w-4 h-4 text-text-muted transition-transform duration-200 ${selectedRoute === route.id ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                                    </svg>
-                                </div>
-                            </button>
+                    {loading ? (
+                        <p className="text-center text-text-muted">Loading routes...</p>
+                    ) : (
+                        routes.map((route) => {
+                            const routeBuses = getRouteBuses(route.id);
+                            const nextBusEta = routeBuses[0]?.eta || "N/A";
 
-                            {selectedRoute === route.id && (
-                                <div className="border-t border-border">
-                                    {/* Stops Timeline */}
-                                    <div className="p-5 border-b border-border">
-                                        <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Route Stops</p>
-                                        <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                                            {route.stops.map((stop, i) => (
-                                                <div key={stop} className="flex items-center gap-2 shrink-0">
-                                                    <div className="flex flex-col items-center">
-                                                        <div className={`w-3 h-3 rounded-full ${i === 0 ? "bg-primary" : i === route.stops.length - 1 ? "bg-danger" : "bg-border"}`} />
-                                                    </div>
-                                                    <span className="text-xs text-text font-medium whitespace-nowrap">{stop}</span>
-                                                    {i < route.stops.length - 1 && (
-                                                        <div className="w-8 h-px bg-border" />
-                                                    )}
-                                                </div>
-                                            ))}
+                            return (
+                                <div key={route.id} className="bg-surface border border-border rounded-2xl overflow-hidden">
+                                    <button
+                                        onClick={() => setSelectedRoute(selectedRoute === route.id ? null : route.id)}
+                                        className="w-full p-5 flex items-center justify-between hover:bg-background-alt transition-colors duration-200 cursor-pointer"
+                                    >
+                                        <div className="text-left">
+                                            <h3 className="font-bold text-text">{route.name}</h3>
+                                            <p className="text-xs text-text-muted mt-1">{route.frequency} · {route.stops.length} stops</p>
                                         </div>
-                                    </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className="text-sm font-semibold text-primary">
+                                                {nextBusEta}
+                                            </span>
+                                            <svg className={`w-4 h-4 text-text-muted transition-transform duration-200 ${selectedRoute === route.id ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                                <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                                            </svg>
+                                        </div>
+                                    </button>
 
-                                    {/* Active Buses on this Route */}
-                                    <div className="divide-y divide-border">
-                                        {route.buses.map((bus) => (
-                                            <div key={bus.id} className="p-4 flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
-                                                        <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                                                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8m-8 4h4m-6 4h10M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
-                                                        </svg>
-                                                    </div>
-                                                    <div>
-                                                        <p className="font-semibold text-text text-sm">{bus.id}</p>
-                                                        <p className="text-xs text-text-muted">{bus.lastSeen}</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-3">
-                                                    <span className={`text-xs font-medium px-2 py-1 rounded-full ${loadColors[bus.load]}`}>
-                                                        {bus.load}
-                                                    </span>
-                                                    <span className="text-sm font-bold text-primary">ETA {bus.eta}</span>
+                                    {selectedRoute === route.id && (
+                                        <div className="border-t border-border">
+                                            {/* Stops Timeline */}
+                                            <div className="p-5 border-b border-border">
+                                                <p className="text-xs font-semibold text-text-muted uppercase tracking-wider mb-3">Route Stops</p>
+                                                <div className="flex items-center gap-2 overflow-x-auto pb-2">
+                                                    {route.stops.map((stop: any, i: number) => (
+                                                        <div key={stop.id} className="flex items-center gap-2 shrink-0">
+                                                            <div className="flex flex-col items-center">
+                                                                <div className={`w-3 h-3 rounded-full ${i === 0 ? "bg-primary" : i === route.stops.length - 1 ? "bg-danger" : "bg-border"}`} />
+                                                            </div>
+                                                            <span className="text-xs text-text font-medium whitespace-nowrap">{stop.name}</span>
+                                                            {i < route.stops.length - 1 && (
+                                                                <div className="w-8 h-px bg-border" />
+                                                            )}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
+
+                                            {/* Active Buses on this Route */}
+                                            <div className="divide-y divide-border">
+                                                {routeBuses.length === 0 ? (
+                                                    <div className="p-4 text-sm text-text-muted text-center">No buses active on this route.</div>
+                                                ) : (
+                                                    routeBuses.map((bus: any) => (
+                                                        <div key={bus.id} className="p-4 flex items-center justify-between">
+                                                            <div className="flex items-center gap-3">
+                                                                <div className="w-10 h-10 bg-primary/10 rounded-xl flex items-center justify-center">
+                                                                    <svg className="w-5 h-5 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                                                                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7h8m-8 4h4m-6 4h10M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2z" />
+                                                                    </svg>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="font-semibold text-text text-sm">{bus.id}</p>
+                                                                    <p className="text-xs text-text-muted">{bus.lastSeen}</p>
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-3">
+                                                                <span className={`text-xs font-medium px-2 py-1 rounded-full ${loadColors[bus.load]}`}>
+                                                                    {bus.load}
+                                                                </span>
+                                                                <span className="text-sm font-bold text-primary">ETA {bus.eta}</span>
+                                                            </div>
+                                                        </div>
+                                                    ))
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
-                            )}
-                        </div>
-                    ))}
+                            );
+                        })
+                    )}
                 </div>
             </div>
         </div>

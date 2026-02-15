@@ -1,22 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 
 type ComplaintStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "DISMISSED";
-
-interface Complaint {
-    id: number;
-    type: string;
-    target: string;
-    description: string;
-    status: ComplaintStatus;
-    date: string;
-}
-
-const myComplaints: Complaint[] = [
-    { id: 1, type: "DRIVER", target: "Auto #PB-08-1234", description: "Driver demanded ₹150 for City Stand (fixed fare ₹100).", status: "IN_PROGRESS", date: "2026-02-14" },
-    { id: 2, type: "BUS", target: "BUS-03", description: "Bus did not stop at Workshop Chowk.", status: "RESOLVED", date: "2026-02-10" },
-];
 
 const statusStyles: Record<ComplaintStatus, string> = {
     OPEN: "bg-cta/10 text-cta",
@@ -27,14 +14,45 @@ const statusStyles: Record<ComplaintStatus, string> = {
 
 export default function ComplaintsPage() {
     const [showForm, setShowForm] = useState(false);
-    const [type, setType] = useState("DRIVER");
-    const [description, setDescription] = useState("");
+    const [complaints, setComplaints] = useState<any[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    // Form
+    const [type, setType] = useState("DRIVER");
+    const [target, setTarget] = useState("");
+    const [description, setDescription] = useState("");
+    const [submitting, setSubmitting] = useState(false);
+
+    useEffect(() => {
+        fetchComplaints();
+    }, []);
+
+    async function fetchComplaints() {
+        try {
+            const data = await api.complaints.list();
+            setComplaints(data);
+        } catch (err) {
+            console.error("Failed to load complaints:", err);
+        } finally {
+            setLoading(false);
+        }
+    }
+
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        alert("Complaint submitted! Admin will review it shortly.");
-        setShowForm(false);
-        setDescription("");
+        setSubmitting(true);
+        try {
+            await api.complaints.create({ type, target, description });
+            alert("Complaint submitted successfully.");
+            setShowForm(false);
+            setDescription("");
+            setTarget("");
+            fetchComplaints(); // Refresh list
+        } catch (err) {
+            alert("Failed to submit complaint.");
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -81,6 +99,8 @@ export default function ComplaintsPage() {
                                 <input
                                     type="text"
                                     placeholder="e.g. Auto #PB-08-1234 or RIDE-42"
+                                    value={target}
+                                    onChange={(e) => setTarget(e.target.value)}
                                     className="w-full px-4 py-3 bg-background border border-border rounded-xl text-text placeholder:text-text-muted/50 focus:outline-none focus:ring-2 focus:ring-primary"
                                 />
                             </div>
@@ -96,8 +116,12 @@ export default function ComplaintsPage() {
                                 />
                             </div>
                             <div className="flex gap-3">
-                                <button type="submit" className="bg-danger hover:opacity-90 text-white px-6 py-3 rounded-xl font-semibold transition-opacity duration-200 cursor-pointer">
-                                    Submit Complaint
+                                <button
+                                    type="submit"
+                                    disabled={submitting}
+                                    className="bg-danger hover:opacity-90 text-white px-6 py-3 rounded-xl font-semibold transition-opacity duration-200 cursor-pointer disabled:opacity-50"
+                                >
+                                    {submitting ? "Submitting..." : "Submit Complaint"}
                                 </button>
                                 <button type="button" onClick={() => setShowForm(false)} className="bg-background border border-border text-text-muted px-6 py-3 rounded-xl font-semibold transition-colors duration-200 cursor-pointer hover:bg-background-alt">
                                     Cancel
@@ -110,23 +134,29 @@ export default function ComplaintsPage() {
                 {/* Complaints List */}
                 <div className="space-y-4">
                     <h2 className="font-bold text-text">My Complaints</h2>
-                    {myComplaints.map((c) => (
-                        <div key={c.id} className="bg-surface border border-border rounded-2xl p-5 hover:border-primary-light transition-colors duration-300">
-                            <div className="flex items-start justify-between mb-2">
-                                <div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs bg-background-alt text-text-muted px-2 py-0.5 rounded-full font-medium">{c.type}</span>
-                                        <span className="text-xs text-text-muted">{c.date}</span>
+                    {loading ? (
+                        <p className="text-text-muted text-sm">Loading complaints...</p>
+                    ) : complaints.length === 0 ? (
+                        <p className="text-text-muted text-sm">No complaints found.</p>
+                    ) : (
+                        complaints.map((c) => (
+                            <div key={c.id} className="bg-surface border border-border rounded-2xl p-5 hover:border-primary-light transition-colors duration-300">
+                                <div className="flex items-start justify-between mb-2">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-xs bg-background-alt text-text-muted px-2 py-0.5 rounded-full font-medium">{c.type}</span>
+                                            <span className="text-xs text-text-muted">{c.createdAt}</span>
+                                        </div>
+                                        <p className="font-semibold text-text mt-1.5">{c.target}</p>
                                     </div>
-                                    <p className="font-semibold text-text mt-1.5">{c.target}</p>
+                                    <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusStyles[c.status as ComplaintStatus] || ""}`}>
+                                        {(c.status || "").replace("_", " ")}
+                                    </span>
                                 </div>
-                                <span className={`text-xs font-medium px-2.5 py-1 rounded-full ${statusStyles[c.status]}`}>
-                                    {c.status.replace("_", " ")}
-                                </span>
+                                <p className="text-sm text-text-muted leading-relaxed">{c.description}</p>
                             </div>
-                            <p className="text-sm text-text-muted leading-relaxed">{c.description}</p>
-                        </div>
-                    ))}
+                        ))
+                    )}
                 </div>
             </div>
         </div>
