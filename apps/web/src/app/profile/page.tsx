@@ -28,7 +28,7 @@ export default function ProfilePage() {
         async function fetchProfile() {
             try {
                 const userData = await api.auth.me();
-                setUser({ ...userData, ...extendedData });
+                setUser({ ...(userData as any), ...extendedData });
             } catch (err) {
                 console.error("Failed to load profile", err);
             } finally {
